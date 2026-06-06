@@ -78,6 +78,25 @@ const PDF = {
             });
 
             const finalY = doc.lastAutoTable.finalY + 12;
+
+            // Bank Details (left) - on Quotation
+            doc.setFillColor(248, 248, 248);
+            doc.roundedRect(15, finalY - 2, 90, 38, 2, 2, 'F');
+            doc.setDrawColor(220, 220, 220);
+            doc.roundedRect(15, finalY - 2, 90, 38, 2, 2, 'S');
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(243, 115, 33);
+            doc.text('BANK TRANSFER DETAILS', 20, finalY + 6);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(70, 70, 70);
+            doc.setFontSize(8);
+            doc.text('Bank of Ceylon', 20, finalY + 13);
+            doc.text('A/C No: 0012-3456-7890', 20, finalY + 19);
+            doc.text('Branch: Homagama', 20, finalY + 25);
+            doc.text('Swift: BCEYLKLX', 20, finalY + 31);
+
+            // Grand Total (right - orange box)
             doc.setFillColor(243, 115, 33);
             doc.roundedRect(120, finalY, 75, 14, 2, 2, 'F');
             doc.setTextColor(255, 255, 255);
@@ -91,7 +110,7 @@ const PDF = {
                 doc.setTextColor(100,100,100);
                 doc.setFontSize(8);
                 doc.setFont('helvetica', 'italic');
-                doc.text('Notes: ' + q.notes, 15, finalY + 25);
+                doc.text('Notes: ' + q.notes, 15, finalY + 45);
             }
 
             this._drawFooter(doc);
@@ -112,13 +131,14 @@ const PDF = {
             const customer = DB.getById('customers', inv.customerId);
             const quotation = inv.quotationId ? DB.getById('quotations', inv.quotationId) : null;
             
+            // Get items - check both 'items' key variations
+            const items = (quotation && quotation.items) ? quotation.items : [];
+            
             let quotationTotal = 0;
-            if (quotation && quotation.items) {
-                quotation.items.forEach(item => {
-                    const sub = item.qty * item.price;
-                    quotationTotal += sub - (sub * (item.discount || 0) / 100);
-                });
-            }
+            items.forEach(item => {
+                const sub = (item.qty || 1) * (item.price || 0);
+                quotationTotal += sub - (sub * (item.discount || 0) / 100);
+            });
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -133,16 +153,16 @@ const PDF = {
             let y = 90;
 
             // === ITEMS TABLE ===
-            if (quotation && quotation.items) {
-                const tableData = quotation.items.map((item, idx) => {
-                    const sub = item.qty * item.price;
+            if (items.length > 0) {
+                const tableData = items.map((item, idx) => {
+                    const sub = (item.qty || 1) * (item.price || 0);
                     const disc = sub * (item.discount || 0) / 100;
                     const total = sub - disc;
                     return [
                         String(idx + 1).padStart(2, '0'),
-                        item.service + (item.description ? '\n' + item.description : ''),
-                        item.price.toLocaleString() + '.00',
-                        item.qty,
+                        (item.service || item.serviceName || 'Service') + (item.description ? '\n' + item.description : ''),
+                        (item.price || 0).toLocaleString() + '.00',
+                        item.qty || 1,
                         total.toLocaleString() + '.00'
                     ];
                 });
@@ -158,55 +178,44 @@ const PDF = {
                 });
                 y = doc.lastAutoTable.finalY + 10;
             } else {
-                y += 10;
+                doc.setFontSize(10);
+                doc.setTextColor(100,100,100);
+                doc.text('(No itemized services linked to this invoice)', 15, y + 5);
+                y += 15;
             }
 
-            // === BANK DETAILS (left) + TOTALS (right) ===
-            // Bank box
-            doc.setFillColor(248, 248, 248);
-            doc.roundedRect(15, y, 90, 38, 2, 2, 'F');
-            doc.setDrawColor(220, 220, 220);
-            doc.roundedRect(15, y, 90, 38, 2, 2, 'S');
-            
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(243, 115, 33);
-            doc.text('BANK TRANSFER DETAILS', 20, y + 8);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(70, 70, 70);
-            doc.setFontSize(8);
-            doc.text('Bank of Ceylon', 20, y + 15);
-            doc.text('A/C No: ' + (inv.accountNumber || '0012-3456-7890'), 20, y + 21);
-            doc.text('Branch: ' + (inv.branch || 'Homagama'), 20, y + 27);
-            doc.text('Swift: BCEYLKLX', 20, y + 33);
-
-            // Totals (right)
+            // === TOTALS (right side only - NO bank details on invoice) ===
             const tx = 120;
+            doc.setDrawColor(226, 232, 240);
+            doc.line(tx, y, 195, y);
+            y += 8;
+
             doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(100, 100, 100);
-            doc.text('Subtotal', tx, y + 8);
+            doc.text('Subtotal', tx, y);
             doc.setTextColor(51, 51, 51);
-            doc.text('LKR ' + (quotationTotal || inv.total).toLocaleString() + '.00', 193, y + 8, { align: 'right' });
+            doc.text('LKR ' + (quotationTotal || inv.total).toLocaleString() + '.00', 193, y, { align: 'right' });
 
+            y += 8;
             const pct = inv.advancePercent || 50;
             const advAmt = inv.advanceAmount || (inv.total * pct / 100);
             doc.setTextColor(100, 100, 100);
-            doc.text('Advance Payment', tx, y + 16);
+            doc.text('Advance Payment (' + pct + '%)', tx, y);
             doc.setTextColor(51, 51, 51);
-            doc.text('- LKR ' + advAmt.toLocaleString() + '.00', 193, y + 16, { align: 'right' });
+            doc.text('- LKR ' + advAmt.toLocaleString() + '.00', 193, y, { align: 'right' });
 
             // Total Due orange box
-            const tdY = y + 24;
+            y += 10;
             doc.setFillColor(243, 115, 33);
-            doc.roundedRect(tx, tdY, 75, 14, 2, 2, 'F');
+            doc.roundedRect(tx, y, 75, 14, 2, 2, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
-            doc.text('Total Due', tx + 5, tdY + 9);
+            doc.text('Total Due', tx + 5, y + 9);
             doc.setFontSize(11);
             const totalDue = inv.total - (inv.amountPaid || 0);
-            doc.text('LKR ' + totalDue.toLocaleString() + '.00', 190, tdY + 9, { align: 'right' });
+            doc.text('LKR ' + totalDue.toLocaleString() + '.00', 190, y + 9, { align: 'right' });
 
             // === FOOTER ===
             doc.setTextColor(100, 100, 100);
