@@ -1,0 +1,385 @@
+// ==========================================
+// PDF GENERATION
+// ==========================================
+
+const PDF = {
+    
+    COMPANY: {
+        name: 'DesignFox',
+        email: 'info@designfox.com',
+        phone: '+94 77 123 4567',
+        address: '123 Business Street, Colombo, Sri Lanka',
+        website: 'www.designfox.com'
+    },
+
+    // Generate Quotation PDF
+    generateQuotation(quotationId) {
+        const q = DB.getById('quotations', quotationId);
+        if (!q) { App.showToast('Quotation not found', 'error'); return; }
+        
+        const customer = DB.getById('customers', q.customerId);
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Header Background
+        doc.setFillColor(37, 99, 235);
+        doc.rect(0, 0, 210, 38, 'F');
+
+        // Company Name
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(this.COMPANY.name, 15, 18);
+
+        // Company Details
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${this.COMPANY.email} | ${this.COMPANY.phone}`, 15, 26);
+        doc.text(this.COMPANY.address, 15, 32);
+
+        // Document Title
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('QUOTATION', 195, 20, { align: 'right' });
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(q.number, 195, 28, { align: 'right' });
+
+        // Reset color
+        doc.setTextColor(0, 0, 0);
+        let y = 50;
+
+        // Quotation Info
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Quotation Details:', 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Number: ${q.number}`, 15, y + 8);
+        doc.text(`Date: ${q.createdAt}`, 15, y + 15);
+        doc.text(`Status: ${q.status}`, 15, y + 22);
+
+        // Customer Info
+        doc.setFont('helvetica', 'bold');
+        doc.text('Bill To:', 120, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(customer?.name || 'N/A', 120, y + 8);
+        if (customer?.company) doc.text(customer.company, 120, y + 15);
+        if (customer?.email) doc.text(customer.email, 120, y + 22);
+        if (customer?.phone) doc.text(customer.phone, 120, y + 29);
+        if (customer?.address) doc.text(customer.address, 120, y + 36);
+
+        y += 48;
+
+        // Line separator
+        doc.setDrawColor(200, 200, 200);
+        doc.line(15, y, 195, y);
+        y += 8;
+
+        // Items Table
+        const tableData = (q.items || []).map((item, i) => {
+            const subtotal = item.qty * item.price;
+            const discountAmt = subtotal * (item.discount || 0) / 100;
+            const total = subtotal - discountAmt;
+            return [
+                i + 1,
+                item.service,
+                item.qty,
+                `LKR ${item.price.toLocaleString()}`,
+                `${item.discount || 0}%`,
+                `LKR ${total.toLocaleString()}`
+            ];
+        });
+
+        doc.autoTable({
+            startY: y,
+            head: [['#', 'Service', 'Qty', 'Unit Price', 'Discount', 'Total']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: { 
+                fillColor: [37, 99, 235], 
+                textColor: [255, 255, 255],
+                fontSize: 10,
+                fontStyle: 'bold'
+            },
+            styles: { fontSize: 9, cellPadding: 6 },
+            columnStyles: {
+                0: { cellWidth: 12, halign: 'center' },
+                1: { cellWidth: 60 },
+                2: { cellWidth: 20, halign: 'center' },
+                3: { cellWidth: 35, halign: 'right' },
+                4: { cellWidth: 25, halign: 'center' },
+                5: { cellWidth: 35, halign: 'right' }
+            }
+        });
+
+        // Total
+        const finalY = doc.lastAutoTable.finalY + 12;
+        doc.setFillColor(240, 249, 255);
+        doc.rect(120, finalY - 5, 75, 20, 'F');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Grand Total:', 125, finalY + 6);
+        doc.setTextColor(37, 99, 235);
+        doc.text(`LKR ${q.total.toLocaleString()}`, 190, finalY + 6, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+
+        // Notes
+        if (q.notes) {
+            const notesY = finalY + 28;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Notes:', 15, notesY);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text(q.notes, 15, notesY + 8);
+        }
+
+        // Footer
+        const pageHeight = doc.internal.pageSize.height;
+        doc.setFontSize(8);
+        doc.setTextColor(128, 128, 128);
+        doc.text('Thank you for your business!', 105, pageHeight - 18, { align: 'center' });
+        doc.text(`Generated by ${this.COMPANY.name} PayTrack System`, 105, pageHeight - 12, { align: 'center' });
+
+        // Save
+        doc.save(`Quotation_${q.number}.pdf`);
+        App.showToast('Quotation PDF downloaded!', 'success');
+    },
+
+    // Generate Invoice PDF
+    generateInvoice(invoiceId) {
+        const inv = DB.getById('invoices', invoiceId);
+        if (!inv) { App.showToast('Invoice not found', 'error'); return; }
+        
+        const customer = DB.getById('customers', inv.customerId);
+        const quotation = inv.quotationId ? DB.getById('quotations', inv.quotationId) : null;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Header Background
+        doc.setFillColor(37, 99, 235);
+        doc.rect(0, 0, 210, 38, 'F');
+
+        // Company Name
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(this.COMPANY.name, 15, 18);
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${this.COMPANY.email} | ${this.COMPANY.phone}`, 15, 26);
+        doc.text(this.COMPANY.address, 15, 32);
+
+        // Document Title
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${inv.type} INVOICE`, 195, 20, { align: 'right' });
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(inv.number, 195, 28, { align: 'right' });
+
+        doc.setTextColor(0, 0, 0);
+        let y = 50;
+
+        // Invoice Info
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Invoice Details:', 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Number: ${inv.number}`, 15, y + 8);
+        doc.text(`Type: ${inv.type} Invoice`, 15, y + 15);
+        doc.text(`Date: ${inv.createdAt}`, 15, y + 22);
+        doc.text(`Status: ${inv.status.replace('_', ' ')}`, 15, y + 29);
+
+        // Customer Info
+        doc.setFont('helvetica', 'bold');
+        doc.text('Bill To:', 120, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(customer?.name || 'N/A', 120, y + 8);
+        if (customer?.company) doc.text(customer.company, 120, y + 15);
+        if (customer?.email) doc.text(customer.email, 120, y + 22);
+        if (customer?.phone) doc.text(customer.phone, 120, y + 29);
+
+        y += 42;
+
+        // Items from quotation
+        if (quotation && quotation.items) {
+            doc.setDrawColor(200, 200, 200);
+            doc.line(15, y, 195, y);
+            y += 8;
+
+            const tableData = quotation.items.map((item, i) => {
+                const subtotal = item.qty * item.price;
+                const discountAmt = subtotal * (item.discount || 0) / 100;
+                const total = subtotal - discountAmt;
+                return [i + 1, item.service, item.qty, `LKR ${item.price.toLocaleString()}`, `LKR ${total.toLocaleString()}`];
+            });
+
+            doc.autoTable({
+                startY: y,
+                head: [['#', 'Service', 'Qty', 'Unit Price', 'Total']],
+                body: tableData,
+                theme: 'striped',
+                headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontSize: 10 },
+                styles: { fontSize: 9, cellPadding: 6 },
+                columnStyles: {
+                    0: { cellWidth: 12, halign: 'center' },
+                    1: { cellWidth: 70 },
+                    2: { cellWidth: 20, halign: 'center' },
+                    3: { cellWidth: 40, halign: 'right' },
+                    4: { cellWidth: 40, halign: 'right' }
+                }
+            });
+
+            y = doc.lastAutoTable.finalY + 12;
+        } else {
+            y += 10;
+        }
+
+        // Payment Summary Box
+        doc.setFillColor(245, 247, 250);
+        doc.rect(110, y - 5, 85, 45, 'F');
+        doc.setDrawColor(200, 200, 200);
+        doc.rect(110, y - 5, 85, 45, 'S');
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Invoice Total:', 115, y + 5);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`LKR ${inv.total.toLocaleString()}`, 190, y + 5, { align: 'right' });
+
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(16, 185, 129);
+        doc.text('Amount Paid:', 115, y + 15);
+        doc.text(`LKR ${(inv.amountPaid || 0).toLocaleString()}`, 190, y + 15, { align: 'right' });
+
+        doc.setTextColor(239, 68, 68);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Balance Due:', 115, y + 27);
+        doc.setFontSize(12);
+        doc.text(`LKR ${(inv.balance || 0).toLocaleString()}`, 190, y + 27, { align: 'right' });
+        
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+
+        // Bank Details
+        if (inv.bankName || inv.accountNumber) {
+            const bankY = y + 50;
+            doc.setFont('helvetica', 'bold');
+            doc.text('Payment Details:', 15, bankY);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            
+            let bY = bankY + 8;
+            if (inv.bankName) { doc.text(`Bank: ${inv.bankName}`, 15, bY); bY += 7; }
+            if (inv.accountName) { doc.text(`Account Name: ${inv.accountName}`, 15, bY); bY += 7; }
+            if (inv.accountNumber) { doc.text(`Account Number: ${inv.accountNumber}`, 15, bY); bY += 7; }
+            if (inv.branch) { doc.text(`Branch: ${inv.branch}`, 15, bY); bY += 7; }
+        }
+
+        // Footer
+        const pageHeight = doc.internal.pageSize.height;
+        doc.setFontSize(8);
+        doc.setTextColor(128, 128, 128);
+        doc.text('Thank you for your business!', 105, pageHeight - 18, { align: 'center' });
+        doc.text(`Generated by ${this.COMPANY.name} PayTrack System`, 105, pageHeight - 12, { align: 'center' });
+
+        // Save
+        doc.save(`Invoice_${inv.number}.pdf`);
+        App.showToast('Invoice PDF downloaded!', 'success');
+    },
+
+    // Generate Receipt PDF
+    generateReceipt(paymentId) {
+        const payment = DB.getById('payments', paymentId);
+        if (!payment) { App.showToast('Payment not found', 'error'); return; }
+        
+        const invoice = DB.getById('invoices', payment.invoiceId);
+        const customer = invoice ? DB.getById('customers', invoice.customerId) : null;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Header
+        doc.setFillColor(16, 185, 129);
+        doc.rect(0, 0, 210, 38, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(this.COMPANY.name, 15, 18);
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${this.COMPANY.email} | ${this.COMPANY.phone}`, 15, 26);
+        doc.text(this.COMPANY.address, 15, 32);
+
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PAYMENT RECEIPT', 195, 20, { align: 'right' });
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(payment.receiptNo, 195, 28, { align: 'right' });
+
+        doc.setTextColor(0, 0, 0);
+        let y = 55;
+
+        // Receipt Info
+        doc.setFont('helvetica', 'bold');
+        doc.text('Receipt Details:', 15, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Receipt #: ${payment.receiptNo}`, 15, y + 8);
+        doc.text(`Date: ${payment.date}`, 15, y + 15);
+        doc.text(`Invoice: ${invoice?.number || 'N/A'}`, 15, y + 22);
+
+        // Received From
+        doc.setFont('helvetica', 'bold');
+        doc.text('Received From:', 120, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(customer?.name || 'N/A', 120, y + 8);
+        if (customer?.company) doc.text(customer.company, 120, y + 15);
+
+        y += 40;
+
+        // Payment Details Table
+        doc.autoTable({
+            startY: y,
+            head: [['Description', 'Details']],
+            body: [
+                ['Amount Received', `LKR ${payment.amount.toLocaleString()}`],
+                ['Payment Method', payment.method.replace('_', ' ')],
+                ['Reference', payment.reference || '-'],
+                ['Date', payment.date],
+                ['Invoice Number', invoice?.number || '-']
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontSize: 10 },
+            styles: { fontSize: 10, cellPadding: 8 },
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 60 },
+                1: { cellWidth: 100 }
+            }
+        });
+
+        // Amount Highlight
+        const finalY = doc.lastAutoTable.finalY + 15;
+        doc.setFillColor(209, 250, 229);
+        doc.roundedRect(30, finalY, 150, 25, 5, 5, 'F');
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(6, 95, 70);
+        doc.text(`Amount Paid: LKR ${payment.amount.toLocaleString()}`, 105, finalY + 15, { align: 'center' });
+
+        doc.setTextColor(0, 0, 0);
+
+        // Footer
+        const pageHeight = doc.internal.pageSize.height;
+        doc.setFontSize(8);
+        doc.setTextColor(128, 128, 128);
+        doc.text('Thank you for your payment!', 105, pageHeight - 18, { align: 'center' });
+        doc.text(`Generated by ${this.COMPANY.name} PayTrack System`, 105, pageHeight - 12, { align: 'center' });
+
+        doc.save(`Receipt_${payment.receiptNo}.pdf`);
+        App.showToast('Receipt PDF downloaded!', 'success');
+    }
+};

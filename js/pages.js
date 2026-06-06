@@ -246,6 +246,7 @@ const Pages = {
                     ${q.status === 'DRAFT' ? `<button class="btn btn-sm btn-info" onclick="Pages.updateQuotationStatus('${q.id}','SENT')">Send</button>` : ''}
                     ${q.status === 'SENT' ? `<button class="btn btn-sm btn-success" onclick="Pages.updateQuotationStatus('${q.id}','APPROVED')">Approve</button>` : ''}
                     ${q.status === 'APPROVED' ? `<button class="btn btn-sm btn-primary" onclick="Pages.createInvoiceFromQuotation('${q.id}')"><i class="fas fa-file-invoice"></i></button>` : ''}
+                    <button class="btn btn-sm btn-secondary" onclick="PDF.generateQuotation('${q.id}')" title="Download PDF"><i class="fas fa-file-pdf"></i></button>
                     <button class="btn btn-sm btn-danger" onclick="Pages.deleteQuotation('${q.id}')"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
@@ -426,6 +427,9 @@ const Pages = {
                 </tbody>
             </table>
             ${q.notes ? `<p style="margin-top:12px;color:var(--gray);font-size:13px;"><strong>Notes:</strong> ${q.notes}</p>` : ''}
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;">
+                <button class="btn btn-primary" onclick="PDF.generateQuotation('${id}')"><i class="fas fa-file-pdf"></i> Download PDF</button>
+            </div>
         `);
     },
 
@@ -499,6 +503,7 @@ const Pages = {
                 <td><span class="badge badge-${i.status === 'PAID' ? 'success' : i.status === 'PARTIALLY_PAID' ? 'warning' : 'danger'}">${i.status.replace('_',' ')}</span></td>
                 <td>
                     ${i.status !== 'PAID' ? `<button class="btn btn-sm btn-success" onclick="Pages.recordPayment('${i.id}')"><i class="fas fa-credit-card"></i> Pay</button>` : ''}
+                    <button class="btn btn-sm btn-secondary" onclick="PDF.generateInvoice('${i.id}')" title="Download PDF"><i class="fas fa-file-pdf"></i></button>
                 </td>
             </tr>
         `).join('');
@@ -607,7 +612,7 @@ const Pages = {
             <div class="card" style="padding:0;">
                 <div class="table-container">
                     <table>
-                        <thead><tr><th>Receipt #</th><th>Invoice</th><th>Amount</th><th>Method</th><th>Reference</th><th>Date</th></tr></thead>
+                        <thead><tr><th>Receipt #</th><th>Invoice</th><th>Amount</th><th>Method</th><th>Reference</th><th>Date</th><th>PDF</th></tr></thead>
                         <tbody>
                             ${payments.length === 0 ? '<tr><td colspan="6" class="empty-state">No payments recorded</td></tr>' : ''}
                             ${payments.reverse().map(p => {
@@ -619,6 +624,7 @@ const Pages = {
                                     <td><span class="badge badge-info">${p.method.replace('_', ' ')}</span></td>
                                     <td>${p.reference || '-'}</td>
                                     <td>${p.date}</td>
+                                    <td><button class="btn btn-sm btn-secondary" onclick="PDF.generateReceipt('${p.id}')" title="Download Receipt"><i class="fas fa-file-pdf"></i></button></td>
                                 </tr>`;
                             }).join('')}
                         </tbody>
