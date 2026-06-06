@@ -586,6 +586,15 @@ const Pages = {
 
         App.closeModal();
         App.showToast(`Payment recorded! Receipt: ${receiptNo}`, 'success');
+        
+        // Auto-download receipt PDF
+        const savedPayment = DB.getAll('payments').find(p => p.receiptNo === receiptNo);
+        if (savedPayment) {
+            setTimeout(() => {
+                PDF.generateReceipt(savedPayment.id);
+            }, 500);
+        }
+        
         Pages.invoices();
     },
 
