@@ -612,7 +612,7 @@ const Pages = {
         App.closeModal();
         App.showToast(`Payment recorded! Receipt: ${receiptNo}`, 'success');
         
-        // Auto-download receipt PDF
+        // Auto-preview receipt PDF
         const savedPayment = DB.getAll('payments').find(p => p.receiptNo === receiptNo);
         if (savedPayment) {
             setTimeout(() => {
