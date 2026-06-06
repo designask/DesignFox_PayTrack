@@ -596,14 +596,25 @@ const Pages = {
 
     renderInvoiceRows(invoices) {
         if (invoices.length === 0) return '<tr><td colspan="8" class="empty-state">No invoices</td></tr>';
-        return invoices.map(i => `
+        return invoices.map(i => {
+            // Recalculate balance from total and paid
+            const total = i.total || 0;
+            const paid = i.amountPaid || 0;
+            const balance = total - paid;
+            
+            // Update stored values if wrong
+            if (i.balance !== balance) {
+                DB.update('invoices', i.id, { balance: balance });
+            }
+            
+            return `
             <tr>
                 <td><strong style="color:var(--primary)">${i.number}</strong></td>
                 <td>${DB.getCustomerName(i.customerId)}</td>
                 <td><span class="badge badge-${i.type === 'ADVANCE' ? 'info' : 'gray'}">${i.type}</span></td>
-                <td>${App.money(i.total)}</td>
-                <td style="color:var(--success)">${App.money(i.amountPaid)}</td>
-                <td style="color:var(--danger);font-weight:600;">${App.money(i.balance)}</td>
+                <td><strong>${App.money(total)}</strong></td>
+                <td style="color:var(--success)">${App.money(paid)}</td>
+                <td style="color:var(--danger);font-weight:600;">${App.money(balance)}</td>
                 <td><span class="badge badge-${i.status === 'PAID' ? 'success' : i.status === 'PARTIALLY_PAID' ? 'warning' : 'danger'}">${i.status.replace('_',' ')}</span></td>
                 <td>
                     ${i.status !== 'PAID' ? `<button class="btn btn-sm btn-success" onclick="Pages.recordPayment('${i.id}')"><i class="fas fa-credit-card"></i> Pay</button>` : ''}
@@ -611,7 +622,7 @@ const Pages = {
                     <button class="btn btn-sm btn-danger" onclick="Pages.confirmDeleteInvoice('${i.id}')" title="Delete Invoice"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
-        `).join('');
+        `}).join('');
     },
 
     filterInvoices() {
@@ -647,14 +658,18 @@ const Pages = {
 
     recordPayment(invoiceId) {
         const invoice = DB.getById('invoices', invoiceId);
+        // Recalculate balance
+        const correctBalance = invoice.total - (invoice.amountPaid || 0);
         App.showModal('Record Payment', `
             <form>
                 <p style="margin-bottom:16px;padding:12px;background:var(--gray-light);border-radius:8px;">
                     <strong>Invoice:</strong> ${invoice.number}<br>
-                    <strong>Balance Due:</strong> <span style="color:var(--danger);font-weight:700;">${App.money(invoice.balance)}</span>
+                    <strong>Invoice Total:</strong> ${App.money(invoice.total)}<br>
+                    <strong>Already Paid:</strong> <span style="color:var(--success);">${App.money(invoice.amountPaid || 0)}</span><br>
+                    <strong>Balance Due:</strong> <span style="color:var(--danger);font-weight:700;">${App.money(correctBalance)}</span>
                 </p>
                 <div class="grid-2">
-                    <div class="form-group"><label>Amount *</label><input type="number" id="pay-amount" value="${invoice.balance}" max="${invoice.balance}" required></div>
+                    <div class="form-group"><label>Amount *</label><input type="number" id="pay-amount" value="${correctBalance}" max="${correctBalance}" required></div>
                     <div class="form-group"><label>Method</label>
                         <select id="pay-method">
                             <option value="BANK_TRANSFER">Bank Transfer</option>
@@ -675,9 +690,12 @@ const Pages = {
         const method = document.getElementById('pay-method').value;
         const reference = document.getElementById('pay-ref').value;
         const invoice = DB.getById('invoices', invoiceId);
+        
+        // Recalculate correct balance
+        const correctBalance = invoice.total - (invoice.amountPaid || 0);
 
         if (!amount || amount <= 0) { App.showToast('Enter valid amount', 'error'); return; }
-        if (amount > invoice.balance) { App.showToast('Amount exceeds balance', 'error'); return; }
+        if (amount > correctBalance) { App.showToast('Amount exceeds balance', 'error'); return; }
 
         // Add payment
         const receiptNo = DB.generateNumber('RCT');
