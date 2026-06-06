@@ -194,20 +194,13 @@ const PDF = {
             const customer = DB.getById('customers', inv.customerId);
             const quotation = inv.quotationId ? DB.getById('quotations', inv.quotationId) : null;
             
-            // Recalculate invoice total from quotation items if available
+            // Recalculate quotation total from items
+            let quotationTotal = 0;
             if (quotation && quotation.items) {
-                let qTotal = 0;
                 quotation.items.forEach(item => {
                     const sub = item.qty * item.price;
-                    qTotal += sub - (sub * (item.discount || 0) / 100);
+                    quotationTotal += sub - (sub * (item.discount || 0) / 100);
                 });
-                // Invoice is percentage of quotation total
-                if (inv.type === 'ADVANCE') {
-                    inv.total = qTotal * 0.5;
-                } else if (inv.type === 'FINAL') {
-                    inv.total = qTotal * 0.5;
-                }
-                inv.balance = inv.total - (inv.amountPaid || 0);
             }
             
             const { jsPDF } = window.jspdf;
@@ -324,14 +317,33 @@ const PDF = {
         doc.line(tx, y, 195, y);
         y += 8;
 
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(71, 85, 105);
-        doc.text('Subtotal:', tx, y);
-        doc.setTextColor(17, 24, 39);
-        doc.text(`LKR ${inv.total.toLocaleString()}`, 193, y, { align: 'right' });
+        // Show Quotation Total
+        if (quotationTotal > 0) {
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(71, 85, 105);
+            doc.text('Quotation Total:', tx, y);
+            doc.setTextColor(17, 24, 39);
+            doc.text(`LKR ${quotationTotal.toLocaleString()}`, 193, y, { align: 'right' });
+            y += 7;
 
-        y += 7;
+            const pct = inv.advancePercent || (inv.type === 'ADVANCE' ? 50 : 50);
+            doc.setTextColor(71, 85, 105);
+            doc.text(`${inv.type} (${pct}%):`, tx, y);
+            doc.setTextColor(17, 24, 39);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`LKR ${inv.total.toLocaleString()}`, 193, y, { align: 'right' });
+            y += 7;
+        } else {
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(17, 24, 39);
+            doc.text('Invoice Total:', tx, y);
+            doc.text(`LKR ${inv.total.toLocaleString()}`, 193, y, { align: 'right' });
+            y += 7;
+        }
+
+        doc.setFont('helvetica', 'normal');
         doc.setTextColor(16, 185, 129);
         doc.text('Amount Paid:', tx, y);
         doc.setFont('helvetica', 'bold');
