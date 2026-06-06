@@ -77,7 +77,8 @@ const App = {
             invoices: 'Invoices',
             payments: 'Payments',
             projects: 'Projects',
-            reports: 'Reports'
+            reports: 'Reports',
+            backup: 'Backup & Restore'
         };
         document.getElementById('page-title').textContent = titles[page] || page;
         
@@ -136,6 +137,71 @@ const App = {
     // Format currency
     money(amount) {
         return 'LKR ' + Number(amount || 0).toLocaleString();
+    },
+
+    // ============ BACKUP & RESTORE ============
+    
+    // Export all data as JSON file (download)
+    exportData() {
+        const data = {
+            exportDate: new Date().toISOString(),
+            appVersion: '1.0',
+            customers: JSON.parse(localStorage.getItem('pf_customers') || '[]'),
+            quotations: JSON.parse(localStorage.getItem('pf_quotations') || '[]'),
+            invoices: JSON.parse(localStorage.getItem('pf_invoices') || '[]'),
+            payments: JSON.parse(localStorage.getItem('pf_payments') || '[]'),
+            projects: JSON.parse(localStorage.getItem('pf_projects') || '[]')
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `PayTrack_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.showToast('Backup downloaded!', 'success');
+    },
+
+    // Import data from JSON file
+    importData() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    
+                    if (!data.customers || !data.quotations) {
+                        this.showToast('Invalid backup file!', 'error');
+                        return;
+                    }
+
+                    if (!confirm('This will replace ALL current data. Are you sure?')) return;
+
+                    localStorage.setItem('pf_customers', JSON.stringify(data.customers));
+                    localStorage.setItem('pf_quotations', JSON.stringify(data.quotations));
+                    localStorage.setItem('pf_invoices', JSON.stringify(data.invoices || []));
+                    localStorage.setItem('pf_payments', JSON.stringify(data.payments || []));
+                    localStorage.setItem('pf_projects', JSON.stringify(data.projects || []));
+
+                    this.showToast('Data restored successfully!', 'success');
+                    this.navigate('dashboard');
+                } catch (err) {
+                    this.showToast('Error reading file!', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
     }
 };
 

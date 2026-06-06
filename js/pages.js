@@ -785,3 +785,92 @@ const Pages = {
         `;
     }
 };
+
+
+
+// ============ BACKUP & RESTORE PAGE ============
+Pages.backup = function() {
+    const customers = DB.getAll('customers');
+    const quotations = DB.getAll('quotations');
+    const invoices = DB.getAll('invoices');
+    const payments = DB.getAll('payments');
+    const projects = DB.getAll('projects');
+
+    document.getElementById('content').innerHTML = `
+        <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
+            <div class="stat-card">
+                <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+                <div class="stat-info"><p>Customers</p><h4>${customers.length}</h4></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green"><i class="fas fa-file-alt"></i></div>
+                <div class="stat-info"><p>Quotations</p><h4>${quotations.length}</h4></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon yellow"><i class="fas fa-file-invoice"></i></div>
+                <div class="stat-info"><p>Invoices</p><h4>${invoices.length}</h4></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon purple"><i class="fas fa-credit-card"></i></div>
+                <div class="stat-info"><p>Payments</p><h4>${payments.length}</h4></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon indigo"><i class="fas fa-folder"></i></div>
+                <div class="stat-info"><p>Projects</p><h4>${projects.length}</h4></div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card" style="text-align:center;padding:40px;">
+                <i class="fas fa-download" style="font-size:48px;color:var(--primary);margin-bottom:16px;"></i>
+                <h3 style="margin-bottom:8px;">Export / Backup</h3>
+                <p style="color:var(--gray);font-size:14px;margin-bottom:20px;">
+                    ඔයාගේ data ඔක්කොම JSON file එකක් විදිහට download කරන්න.<br>
+                    අලුත් device එකට move කරන්න මේ file එක save කරන්න.
+                </p>
+                <button class="btn btn-primary btn-full" onclick="App.exportData()" style="max-width:300px;margin:0 auto;">
+                    <i class="fas fa-download"></i> Download Backup
+                </button>
+            </div>
+
+            <div class="card" style="text-align:center;padding:40px;">
+                <i class="fas fa-upload" style="font-size:48px;color:var(--success);margin-bottom:16px;"></i>
+                <h3 style="margin-bottom:8px;">Import / Restore</h3>
+                <p style="color:var(--gray);font-size:14px;margin-bottom:20px;">
+                    කලින් download කරපු backup file එක upload කරලා data restore කරන්න.<br>
+                    අලුත් device එකේ browser එකේ මේ option එක use කරන්න.
+                </p>
+                <button class="btn btn-success btn-full" onclick="App.importData()" style="max-width:300px;margin:0 auto;">
+                    <i class="fas fa-upload"></i> Upload & Restore
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom:12px;"><i class="fas fa-info-circle" style="color:var(--primary);"></i> Device මාරු කරන්නේ කොහොමද?</h3>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;text-align:center;padding:20px 0;">
+                <div>
+                    <div style="width:60px;height:60px;background:var(--primary-light);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
+                        <i class="fas fa-download" style="font-size:24px;color:var(--primary);"></i>
+                    </div>
+                    <h4>Step 1</h4>
+                    <p style="font-size:13px;color:var(--gray);">පරණ device එකේ<br>"Download Backup" click කරන්න</p>
+                </div>
+                <div>
+                    <div style="width:60px;height:60px;background:#fef3c7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
+                        <i class="fas fa-exchange-alt" style="font-size:24px;color:var(--warning);"></i>
+                    </div>
+                    <h4>Step 2</h4>
+                    <p style="font-size:13px;color:var(--gray);">JSON file එක අලුත් device එකට<br>copy කරන්න (email/drive/USB)</p>
+                </div>
+                <div>
+                    <div style="width:60px;height:60px;background:#d1fae5;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
+                        <i class="fas fa-upload" style="font-size:24px;color:var(--success);"></i>
+                    </div>
+                    <h4>Step 3</h4>
+                    <p style="font-size:13px;color:var(--gray);">අලුත් device එකේ<br>"Upload & Restore" click කරන්න</p>
+                </div>
+            </div>
+        </div>
+    `;
+};
