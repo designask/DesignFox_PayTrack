@@ -237,7 +237,6 @@ const Pages = {
         const invoices = DB.getAll('invoices');
         
         return quotations.map(q => {
-            // Check if invoice already exists for this quotation
             const linkedInvoice = invoices.find(i => i.quotationId === q.id);
             
             let actionButtons = '';
@@ -247,38 +246,8 @@ const Pages = {
                 actionButtons = `<button class="btn btn-sm btn-success" onclick="Pages.updateQuotationStatus('${q.id}','APPROVED')">Approve</button>`;
             } else if (q.status === 'APPROVED') {
                 actionButtons = `<span class="badge badge-success" style="padding:6px 12px;font-size:11px;"><i class="fas fa-check-circle"></i> Approved</span>`;
-                if (!linkedInvoice) {
-                    actionButtons += ` <button class="btn btn-sm btn-primary" onclick="Pages.createInvoiceFromQuotation('${q.id}')" title="Create Invoice"><i class="fas fa-file-invoice"></i> Invoice</button>`;
-                }
             } else if (q.status === 'REJECTED') {
                 actionButtons = `<span class="badge badge-danger" style="padding:6px 12px;font-size:11px;"><i class="fas fa-times-circle"></i> Rejected</span>`;
-            }
-            
-            // Invoice info row
-            let invoiceRow = '';
-            if (linkedInvoice) {
-                invoiceRow = `
-                <tr style="background:#f0fdf4;">
-                    <td colspan="7" style="padding:8px 16px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                            <div style="display:flex;align-items:center;gap:12px;">
-                                <i class="fas fa-file-invoice-dollar" style="color:var(--success);font-size:16px;"></i>
-                                <div>
-                                    <strong style="color:var(--primary);">${linkedInvoice.number}</strong>
-                                    <span class="badge badge-${linkedInvoice.type === 'ADVANCE' ? 'info' : 'gray'}" style="margin-left:8px;">${linkedInvoice.type}</span>
-                                    <span class="badge badge-${linkedInvoice.status === 'PAID' ? 'success' : linkedInvoice.status === 'PARTIALLY_PAID' ? 'warning' : 'danger'}" style="margin-left:4px;">${linkedInvoice.status.replace('_',' ')}</span>
-                                </div>
-                            </div>
-                            <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
-                                <span>Total: <strong>${App.money(linkedInvoice.total)}</strong></span>
-                                <span style="color:var(--success);">Paid: <strong>${App.money(linkedInvoice.amountPaid || 0)}</strong></span>
-                                <span style="color:var(--danger);">Due: <strong>${App.money(linkedInvoice.balance || 0)}</strong></span>
-                                <button class="btn btn-sm btn-secondary" onclick="PDF.generateInvoice('${linkedInvoice.id}')" title="Invoice PDF"><i class="fas fa-file-pdf"></i></button>
-                                ${linkedInvoice.status !== 'PAID' ? `<button class="btn btn-sm btn-success" onclick="Pages.recordPayment('${linkedInvoice.id}')"><i class="fas fa-credit-card"></i> Pay</button>` : ''}
-                            </div>
-                        </div>
-                    </td>
-                </tr>`;
             }
             
             return `
@@ -295,7 +264,6 @@ const Pages = {
                     <button class="btn btn-sm btn-danger" onclick="Pages.deleteQuotation('${q.id}')"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
-            ${invoiceRow}
         `}).join('');
     },
 
