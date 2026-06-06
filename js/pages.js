@@ -504,6 +504,7 @@ const Pages = {
                 <td>
                     ${i.status !== 'PAID' ? `<button class="btn btn-sm btn-success" onclick="Pages.recordPayment('${i.id}')"><i class="fas fa-credit-card"></i> Pay</button>` : ''}
                     <button class="btn btn-sm btn-secondary" onclick="PDF.generateInvoice('${i.id}')" title="Download PDF"><i class="fas fa-file-pdf"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="Pages.confirmDeleteInvoice('${i.id}')" title="Delete Invoice"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `).join('');
@@ -514,6 +515,30 @@ const Pages = {
         let invoices = DB.getAll('invoices');
         if (status) invoices = invoices.filter(i => i.status === status);
         document.getElementById('invoices-table').innerHTML = this.renderInvoiceRows(invoices);
+    },
+
+    confirmDeleteInvoice(id) {
+        const inv = DB.getById('invoices', id);
+        App.showModal('Delete Invoice', `
+            <div style="text-align:center;padding:20px;">
+                <i class="fas fa-exclamation-triangle" style="font-size:48px;color:var(--danger);margin-bottom:16px;"></i>
+                <h3 style="margin-bottom:8px;">Are you sure?</h3>
+                <p style="color:var(--gray);margin-bottom:16px;">This action cannot be undone. Invoice <strong>${inv?.number || ''}</strong> will be permanently deleted.</p>
+                <p style="font-size:13px;color:var(--danger);margin-bottom:8px;">
+                    <strong>Invoice:</strong> ${inv?.number}<br>
+                    <strong>Customer:</strong> ${DB.getCustomerName(inv?.customerId)}<br>
+                    <strong>Amount:</strong> ${App.money(inv?.total)}
+                </p>
+            </div>
+        `, `<button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+            <button class="btn btn-danger" onclick="Pages.deleteInvoice('${id}')"><i class="fas fa-trash"></i> Yes, Delete</button>`);
+    },
+
+    deleteInvoice(id) {
+        DB.delete('invoices', id);
+        App.closeModal();
+        App.showToast('Invoice deleted!', 'success');
+        Pages.invoices();
     },
 
     recordPayment(invoiceId) {
