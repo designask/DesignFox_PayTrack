@@ -382,7 +382,6 @@ const Pages = {
     updateQuotationStatus(id, status) {
         DB.update('quotations', id, { status });
         
-        // If approved, create project + auto create invoice
         if (status === 'APPROVED') {
             const q = DB.getById('quotations', id);
             
@@ -397,48 +396,84 @@ const Pages = {
                 DB.update('quotations', id, { total: qTotal });
             }
             
-            // Create project
-            DB.add('projects', {
-                quotationId: id,
-                customerId: q.customerId,
-                title: `Project - ${q.number}`,
-                steps: [
-                    { name: 'Quotation Approved', status: 'COMPLETED' },
-                    { name: 'Advance Invoice Sent', status: 'COMPLETED' },
-                    { name: 'Advance Payment Received', status: 'PENDING' },
-                    { name: 'Work Started', status: 'PENDING' },
-                    { name: 'Project Completed', status: 'PENDING' },
-                    { name: 'Final Invoice Sent', status: 'PENDING' },
-                    { name: 'Balance Payment Received', status: 'PENDING' },
-                    { name: 'Final Delivery Completed', status: 'PENDING' }
-                ]
-            });
+            // Show advance percentage modal
+            App.showModal('Advance Payment', `
+                <div style="text-align:center;padding:10px 0 20px;">
+                    <i class="fas fa-check-circle" style="font-size:40px;color:var(--success);margin-bottom:12px;"></i>
+                    <h3 style="margin-bottom:4px;">Quotation Approved!</h3>
+                    <p style="color:var(--gray);font-size:14px;">Quotation Total: <strong>${App.money(q.total)}</strong></p>
+                </div>
+                <div class="form-group">
+                    <label>Advance Payment Percentage (%)</label>
+                    <input type="number" id="advance-percent" value="50" min="1" max="100" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:20px;text-align:center;font-weight:700;">
+                </div>
+                <div style="background:#f3f4f6;padding:16px;border-radius:8px;text-align:center;margin-top:12px;">
+                    <p style="color:#6b7280;font-size:13px;">Advance Invoice Amount:</p>
+                    <p id="advance-amount" style="font-size:24px;font-weight:700;color:#2563eb;">${App.money(q.total * 0.5)}</p>
+                </div>
+            `, `<button class="btn btn-secondary" onclick="App.closeModal();DB.update('quotations','${id}',{status:'SENT'});Pages.quotations();">Cancel</button>
+                <button class="btn btn-success" onclick="Pages.completeApproval('${id}')"><i class="fas fa-file-invoice-dollar"></i> Create Invoice</button>`);
             
-            // Auto create advance invoice (50%)
-            const advanceAmount = q.total * 0.5;
-            DB.add('invoices', {
-                number: DB.generateNumber('INV-ADV'),
-                quotationId: id,
-                customerId: q.customerId,
-                type: 'ADVANCE',
-                status: 'UNPAID',
-                total: advanceAmount,
-                amountPaid: 0,
-                balance: advanceAmount,
-                bankName: 'Commercial Bank',
-                accountName: 'DesignFox Pvt Ltd',
-                accountNumber: '8012345678',
-                branch: 'Colombo'
-            });
+            setTimeout(() => {
+                const input = document.getElementById('advance-percent');
+                if (input) {
+                    const qTotal = q.total;
+                    input.addEventListener('input', function() {
+                        const pct = parseFloat(this.value) || 0;
+                        const amt = qTotal * pct / 100;
+                        document.getElementById('advance-amount').textContent = App.money(amt);
+                    });
+                }
+            }, 100);
             
-            App.showToast('Quotation approved! Invoice created automatically.', 'success');
-            
-            // Navigate to Invoices tab
-            App.navigate('invoices');
         } else {
-            App.showToast(`Quotation ${status.toLowerCase()}`, 'success');
+            App.showToast('Quotation ' + status.toLowerCase(), 'success');
             Pages.quotations();
         }
+    },
+
+    completeApproval(quotationId) {
+        const q = DB.getById('quotations', quotationId);
+        const percent = parseFloat(document.getElementById('advance-percent').value) || 50;
+        const advanceAmount = q.total * percent / 100;
+        
+        // Create project
+        DB.add('projects', {
+            quotationId: quotationId,
+            customerId: q.customerId,
+            title: 'Project - ' + q.number,
+            steps: [
+                { name: 'Quotation Approved', status: 'COMPLETED' },
+                { name: 'Advance Invoice Sent', status: 'COMPLETED' },
+                { name: 'Advance Payment Received', status: 'PENDING' },
+                { name: 'Work Started', status: 'PENDING' },
+                { name: 'Project Completed', status: 'PENDING' },
+                { name: 'Final Invoice Sent', status: 'PENDING' },
+                { name: 'Balance Payment Received', status: 'PENDING' },
+                { name: 'Final Delivery Completed', status: 'PENDING' }
+            ]
+        });
+        
+        // Create advance invoice with custom percentage
+        DB.add('invoices', {
+            number: DB.generateNumber('INV-ADV'),
+            quotationId: quotationId,
+            customerId: q.customerId,
+            type: 'ADVANCE',
+            status: 'UNPAID',
+            total: advanceAmount,
+            amountPaid: 0,
+            balance: advanceAmount,
+            advancePercent: percent,
+            bankName: 'Commercial Bank',
+            accountName: 'DesignFox Pvt Ltd',
+            accountNumber: '8012345678',
+            branch: 'Colombo'
+        });
+        
+        App.closeModal();
+        App.showToast('Invoice created! Advance: ' + percent + '% = ' + App.money(advanceAmount), 'success');
+        App.navigate('invoices');
     },
 
     deleteQuotation(id) {
