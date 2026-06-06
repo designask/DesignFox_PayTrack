@@ -382,16 +382,29 @@ const Pages = {
     updateQuotationStatus(id, status) {
         DB.update('quotations', id, { status });
         
-        // If approved, create project
+        // If approved, create project + auto create invoice
         if (status === 'APPROVED') {
             const q = DB.getById('quotations', id);
+            
+            // Recalculate total
+            let qTotal = 0;
+            (q.items || []).forEach(item => {
+                const sub = item.qty * item.price;
+                qTotal += sub - (sub * (item.discount || 0) / 100);
+            });
+            if (qTotal > 0) {
+                q.total = qTotal;
+                DB.update('quotations', id, { total: qTotal });
+            }
+            
+            // Create project
             DB.add('projects', {
                 quotationId: id,
                 customerId: q.customerId,
                 title: `Project - ${q.number}`,
                 steps: [
                     { name: 'Quotation Approved', status: 'COMPLETED' },
-                    { name: 'Advance Invoice Sent', status: 'PENDING' },
+                    { name: 'Advance Invoice Sent', status: 'COMPLETED' },
                     { name: 'Advance Payment Received', status: 'PENDING' },
                     { name: 'Work Started', status: 'PENDING' },
                     { name: 'Project Completed', status: 'PENDING' },
@@ -400,11 +413,32 @@ const Pages = {
                     { name: 'Final Delivery Completed', status: 'PENDING' }
                 ]
             });
-            App.showToast('Quotation approved & project created!', 'success');
+            
+            // Auto create advance invoice (50%)
+            const advanceAmount = q.total * 0.5;
+            DB.add('invoices', {
+                number: DB.generateNumber('INV-ADV'),
+                quotationId: id,
+                customerId: q.customerId,
+                type: 'ADVANCE',
+                status: 'UNPAID',
+                total: advanceAmount,
+                amountPaid: 0,
+                balance: advanceAmount,
+                bankName: 'Commercial Bank',
+                accountName: 'DesignFox Pvt Ltd',
+                accountNumber: '8012345678',
+                branch: 'Colombo'
+            });
+            
+            App.showToast('Quotation approved! Invoice created automatically.', 'success');
+            
+            // Navigate to Invoices tab
+            App.navigate('invoices');
         } else {
             App.showToast(`Quotation ${status.toLowerCase()}`, 'success');
+            Pages.quotations();
         }
-        Pages.quotations();
     },
 
     deleteQuotation(id) {
