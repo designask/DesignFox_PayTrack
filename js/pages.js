@@ -404,6 +404,18 @@ const Pages = {
     viewQuotation(id) {
         const q = DB.getById('quotations', id);
         const customer = DB.getById('customers', q.customerId);
+        
+        // Always recalculate total from items
+        let recalcTotal = 0;
+        (q.items || []).forEach(i => {
+            const sub = i.qty * i.price;
+            recalcTotal += sub - (sub * (i.discount || 0) / 100);
+        });
+        if (recalcTotal > 0) {
+            q.total = recalcTotal;
+            DB.update('quotations', id, { total: recalcTotal });
+        }
+        
         App.showModal(`Quotation ${q.number}`, `
             <div class="grid-2" style="margin-bottom:16px;">
                 <div>
@@ -435,6 +447,15 @@ const Pages = {
 
     createInvoiceFromQuotation(qId) {
         const q = DB.getById('quotations', qId);
+        
+        // Recalculate quotation total from items
+        let qTotal = 0;
+        (q.items || []).forEach(item => {
+            const sub = item.qty * item.price;
+            qTotal += sub - (sub * (item.discount || 0) / 100);
+        });
+        if (qTotal > 0) q.total = qTotal;
+        
         const advanceAmount = q.total * 0.5;
         
         const invoice = DB.add('invoices', {

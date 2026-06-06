@@ -46,6 +46,14 @@ const PDF = {
             const customer = DB.getById('customers', q.customerId);
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
+            
+            // Recalculate total from items
+            let grandTotal = 0;
+            (q.items || []).forEach(item => {
+                const sub = item.qty * item.price;
+                grandTotal += sub - (sub * (item.discount || 0) / 100);
+            });
+            if (grandTotal > 0) q.total = grandTotal;
 
         // Header Background
         doc.setFillColor(37, 99, 235);
@@ -185,6 +193,23 @@ const PDF = {
             
             const customer = DB.getById('customers', inv.customerId);
             const quotation = inv.quotationId ? DB.getById('quotations', inv.quotationId) : null;
+            
+            // Recalculate invoice total from quotation items if available
+            if (quotation && quotation.items) {
+                let qTotal = 0;
+                quotation.items.forEach(item => {
+                    const sub = item.qty * item.price;
+                    qTotal += sub - (sub * (item.discount || 0) / 100);
+                });
+                // Invoice is percentage of quotation total
+                if (inv.type === 'ADVANCE') {
+                    inv.total = qTotal * 0.5;
+                } else if (inv.type === 'FINAL') {
+                    inv.total = qTotal * 0.5;
+                }
+                inv.balance = inv.total - (inv.amountPaid || 0);
+            }
+            
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
         const pageWidth = 210;
