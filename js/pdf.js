@@ -14,12 +14,14 @@ const PDF = {
 
     // Generate Quotation PDF
     generateQuotation(quotationId) {
-        const q = DB.getById('quotations', quotationId);
-        if (!q) { App.showToast('Quotation not found', 'error'); return; }
-        
-        const customer = DB.getById('customers', q.customerId);
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
+        try {
+            const q = DB.getById('quotations', quotationId);
+            if (!q) { App.showToast('Quotation not found', 'error'); return; }
+            if (!window.jspdf) { App.showToast('PDF library loading... try again', 'error'); return; }
+            
+            const customer = DB.getById('customers', q.customerId);
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
 
         // Header Background
         doc.setFillColor(37, 99, 235);
@@ -144,17 +146,24 @@ const PDF = {
         // Save
         doc.save(`Quotation_${q.number}.pdf`);
         App.showToast('Quotation PDF downloaded!', 'success');
+        } catch (error) {
+            console.error('Quotation PDF Error:', error);
+            App.showToast('PDF error: ' + error.message, 'error');
+        }
     },
 
     // Generate Invoice PDF - Professional Design
     generateInvoice(invoiceId) {
-        const inv = DB.getById('invoices', invoiceId);
-        if (!inv) { App.showToast('Invoice not found', 'error'); return; }
-        
-        const customer = DB.getById('customers', inv.customerId);
-        const quotation = inv.quotationId ? DB.getById('quotations', inv.quotationId) : null;
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
+        try {
+            const inv = DB.getById('invoices', invoiceId);
+            if (!inv) { App.showToast('Invoice not found', 'error'); return; }
+            
+            if (!window.jspdf) { App.showToast('PDF library loading... try again', 'error'); return; }
+            
+            const customer = DB.getById('customers', inv.customerId);
+            const quotation = inv.quotationId ? DB.getById('quotations', inv.quotationId) : null;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
         const pageWidth = 210;
         const pH = doc.internal.pageSize.height;
 
@@ -345,17 +354,23 @@ const PDF = {
 
         doc.save(`Invoice_${inv.number}.pdf`);
         App.showToast('Invoice PDF downloaded!', 'success');
+        } catch (error) {
+            console.error('Invoice PDF Error:', error);
+            App.showToast('PDF error: ' + error.message, 'error');
+        }
     },
 
     // Generate Receipt PDF
     generateReceipt(paymentId) {
-        const payment = DB.getById('payments', paymentId);
-        if (!payment) { App.showToast('Payment not found', 'error'); return; }
-        
-        const invoice = DB.getById('invoices', payment.invoiceId);
-        const customer = invoice ? DB.getById('customers', invoice.customerId) : null;
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
+        try {
+            const payment = DB.getById('payments', paymentId);
+            if (!payment) { App.showToast('Payment not found', 'error'); return; }
+            if (!window.jspdf) { App.showToast('PDF library loading... try again', 'error'); return; }
+            
+            const invoice = DB.getById('invoices', payment.invoiceId);
+            const customer = invoice ? DB.getById('customers', invoice.customerId) : null;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
 
         // Header
         doc.setFillColor(16, 185, 129);
@@ -438,5 +453,9 @@ const PDF = {
 
         doc.save(`Receipt_${payment.receiptNo}.pdf`);
         App.showToast('Receipt PDF downloaded!', 'success');
+        } catch (error) {
+            console.error('Receipt PDF Error:', error);
+            App.showToast('PDF error: ' + error.message, 'error');
+        }
     }
 };
