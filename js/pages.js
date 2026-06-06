@@ -715,7 +715,7 @@ const Pages = {
             <div class="card" style="padding:0;">
                 <div class="table-container">
                     <table>
-                        <thead><tr><th>Receipt #</th><th>Invoice</th><th>Amount</th><th>Method</th><th>Reference</th><th>Date</th><th>PDF</th></tr></thead>
+                        <thead><tr><th>Receipt #</th><th>Invoice</th><th>Amount</th><th>Method</th><th>Reference</th><th>Date</th><th>Actions</th></tr></thead>
                         <tbody>
                             ${payments.length === 0 ? '<tr><td colspan="6" class="empty-state">No payments recorded</td></tr>' : ''}
                             ${payments.reverse().map(p => {
@@ -727,7 +727,10 @@ const Pages = {
                                     <td><span class="badge badge-info">${p.method.replace('_', ' ')}</span></td>
                                     <td>${p.reference || '-'}</td>
                                     <td>${p.date}</td>
-                                    <td><button class="btn btn-sm btn-secondary" onclick="PDF.generateReceipt('${p.id}')" title="Download Receipt"><i class="fas fa-file-pdf"></i></button></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary" onclick="PDF.generateReceipt('${p.id}')" title="Download Receipt"><i class="fas fa-file-pdf"></i></button>
+                                        <button class="btn btn-sm btn-danger" onclick="Pages.confirmDeletePayment('${p.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                                    </td>
                                 </tr>`;
                             }).join('')}
                         </tbody>
@@ -735,6 +738,45 @@ const Pages = {
                 </div>
             </div>
         `;
+    },
+
+    confirmDeletePayment(id) {
+        const p = DB.getById('payments', id);
+        const inv = p ? DB.getById('invoices', p.invoiceId) : null;
+        App.showModal('Delete Payment / Receipt', `
+            <div style="text-align:center;padding:20px;">
+                <i class="fas fa-exclamation-triangle" style="font-size:48px;color:var(--danger);margin-bottom:16px;"></i>
+                <h3 style="margin-bottom:8px;">Are you sure?</h3>
+                <p style="color:var(--gray);margin-bottom:16px;">This action cannot be undone. This payment record and receipt will be permanently deleted.</p>
+                <p style="font-size:13px;color:var(--danger);margin-bottom:8px;">
+                    <strong>Receipt:</strong> ${p?.receiptNo || 'N/A'}<br>
+                    <strong>Amount:</strong> ${App.money(p?.amount)}<br>
+                    <strong>Invoice:</strong> ${inv?.number || 'N/A'}<br>
+                    <strong>Method:</strong> ${p?.method?.replace('_', ' ') || '-'}
+                </p>
+            </div>
+        `, `<button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+            <button class="btn btn-danger" onclick="Pages.deletePayment('${id}')"><i class="fas fa-trash"></i> Yes, Delete</button>`);
+    },
+
+    deletePayment(id) {
+        const payment = DB.getById('payments', id);
+        
+        // Reverse the payment on the invoice
+        if (payment && payment.invoiceId) {
+            const inv = DB.getById('invoices', payment.invoiceId);
+            if (inv) {
+                const newPaid = (inv.amountPaid || 0) - payment.amount;
+                const newBalance = inv.total - newPaid;
+                const newStatus = newPaid <= 0 ? 'UNPAID' : 'PARTIALLY_PAID';
+                DB.update('invoices', inv.id, { amountPaid: Math.max(0, newPaid), balance: newBalance, status: newStatus });
+            }
+        }
+        
+        DB.delete('payments', id);
+        App.closeModal();
+        App.showToast('Payment & receipt deleted!', 'success');
+        Pages.payments();
     },
 
     // ============ PROJECTS ============
