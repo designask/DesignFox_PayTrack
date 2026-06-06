@@ -454,17 +454,18 @@ const Pages = {
             ]
         });
         
-        // Create advance invoice with custom percentage
+        // Create advance invoice - total = quotation total, advance amount tracked separately
         DB.add('invoices', {
             number: DB.generateNumber('INV-ADV'),
             quotationId: quotationId,
             customerId: q.customerId,
             type: 'ADVANCE',
             status: 'UNPAID',
-            total: advanceAmount,
-            amountPaid: 0,
-            balance: advanceAmount,
+            total: q.total,
+            advanceAmount: advanceAmount,
             advancePercent: percent,
+            amountPaid: 0,
+            balance: q.total,
             bankName: 'Commercial Bank',
             accountName: 'DesignFox Pvt Ltd',
             accountNumber: '8012345678',
@@ -472,7 +473,7 @@ const Pages = {
         });
         
         App.closeModal();
-        App.showToast('Invoice created! Advance: ' + percent + '% = ' + App.money(advanceAmount), 'success');
+        App.showToast('Invoice created! Total: ' + App.money(q.total) + ' | Advance: ' + percent + '% = ' + App.money(advanceAmount), 'success');
         App.navigate('invoices');
     },
 
@@ -584,7 +585,7 @@ const Pages = {
             <div class="card" style="padding:0;">
                 <div class="table-container">
                     <table>
-                        <thead><tr><th>Invoice #</th><th>Customer</th><th>Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Invoice #</th><th>Customer</th><th>Type</th><th>Total</th><th>Advance</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
                         <tbody id="invoices-table">
                             ${this.renderInvoiceRows(invoices)}
                         </tbody>
@@ -595,12 +596,14 @@ const Pages = {
     },
 
     renderInvoiceRows(invoices) {
-        if (invoices.length === 0) return '<tr><td colspan="8" class="empty-state">No invoices</td></tr>';
+        if (invoices.length === 0) return '<tr><td colspan="9" class="empty-state">No invoices</td></tr>';
         return invoices.map(i => {
-            // Recalculate balance from total and paid
+            // Total = quotation total, balance = total - paid
             const total = i.total || 0;
             const paid = i.amountPaid || 0;
             const balance = total - paid;
+            const advanceAmt = i.advanceAmount || total;
+            const pct = i.advancePercent || 100;
             
             // Update stored values if wrong
             if (i.balance !== balance) {
@@ -613,6 +616,7 @@ const Pages = {
                 <td>${DB.getCustomerName(i.customerId)}</td>
                 <td><span class="badge badge-${i.type === 'ADVANCE' ? 'info' : 'gray'}">${i.type}</span></td>
                 <td><strong>${App.money(total)}</strong></td>
+                <td><span style="color:var(--primary);font-weight:600;">${App.money(advanceAmt)} <small>(${pct}%)</small></span></td>
                 <td style="color:var(--success)">${App.money(paid)}</td>
                 <td style="color:var(--danger);font-weight:600;">${App.money(balance)}</td>
                 <td><span class="badge badge-${i.status === 'PAID' ? 'success' : i.status === 'PARTIALLY_PAID' ? 'warning' : 'danger'}">${i.status.replace('_',' ')}</span></td>
