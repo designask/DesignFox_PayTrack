@@ -215,6 +215,8 @@ const Pages = {
                     <option value="DRAFT">Draft</option>
                     <option value="SENT">Sent</option>
                     <option value="APPROVED">Approved</option>
+                    <option value="ADVANCE_REQUESTED">Advance Requested</option>
+                    <option value="ADVANCE_PAID">Advance Paid</option>
                     <option value="REJECTED">Rejected</option>
                 </select>
                 <button class="btn btn-primary" onclick="Pages.newQuotation()"><i class="fas fa-plus"></i> New Quotation</button>
@@ -234,20 +236,36 @@ const Pages = {
 
     renderQuotationRows(quotations) {
         if (quotations.length === 0) return '<tr><td colspan="7" class="empty-state">No quotations</td></tr>';
-        const invoices = DB.getAll('invoices');
         
         return quotations.map(q => {
-            const linkedInvoice = invoices.find(i => i.quotationId === q.id);
-            
             let actionButtons = '';
+            let statusBadge = '';
+            
+            // Status-based action buttons
             if (q.status === 'DRAFT') {
-                actionButtons = `<button class="btn btn-sm btn-info" onclick="Pages.updateQuotationStatus('${q.id}','SENT')">Send</button>`;
+                statusBadge = `<span class="badge badge-gray">DRAFT</span>`;
+                actionButtons = `
+                    <button class="btn btn-sm btn-info" onclick="Pages.updateQuotationStatus('${q.id}','SENT')">Send</button>
+                    <button class="btn btn-sm btn-danger" onclick="Pages.deleteQuotation('${q.id}')" title="Delete"><i class="fas fa-trash"></i></button>`;
             } else if (q.status === 'SENT') {
-                actionButtons = `<button class="btn btn-sm btn-success" onclick="Pages.updateQuotationStatus('${q.id}','APPROVED')">Approve</button>`;
+                statusBadge = `<span class="badge badge-info">SENT</span>`;
+                actionButtons = `
+                    <button class="btn btn-sm btn-success" onclick="Pages.updateQuotationStatus('${q.id}','APPROVED')">Approve</button>
+                    <button class="btn btn-sm btn-danger" onclick="Pages.rejectQuotation('${q.id}')">Reject</button>`;
             } else if (q.status === 'APPROVED') {
-                actionButtons = `<span class="badge badge-success" style="padding:6px 12px;font-size:11px;"><i class="fas fa-check-circle"></i> Approved</span>`;
+                statusBadge = `<span class="badge badge-success">APPROVED</span>`;
+                actionButtons = `
+                    <button class="btn btn-sm btn-warning" onclick="Pages.requestAdvance('${q.id}')"><i class="fas fa-hand-holding-usd"></i> Request Advance</button>`;
+            } else if (q.status === 'ADVANCE_REQUESTED') {
+                statusBadge = `<span class="badge badge-warning">ADV. REQUESTED</span>`;
+                actionButtons = `
+                    <button class="btn btn-sm btn-success" onclick="Pages.recordAdvancePayment('${q.id}')"><i class="fas fa-credit-card"></i> Record Payment</button>`;
+            } else if (q.status === 'ADVANCE_PAID') {
+                statusBadge = `<span class="badge badge-success">ADV. PAID</span>`;
+                actionButtons = `<span style="color:var(--success);font-size:12px;"><i class="fas fa-check-circle"></i> Invoice Created</span>`;
             } else if (q.status === 'REJECTED') {
-                actionButtons = `<span class="badge badge-danger" style="padding:6px 12px;font-size:11px;"><i class="fas fa-times-circle"></i> Rejected</span>`;
+                statusBadge = `<span class="badge badge-danger">REJECTED</span>`;
+                actionButtons = `<button class="btn btn-sm btn-danger" onclick="Pages.deleteQuotation('${q.id}')" title="Delete"><i class="fas fa-trash"></i></button>`;
             }
             
             return `
@@ -256,12 +274,11 @@ const Pages = {
                 <td>${DB.getCustomerName(q.customerId)}</td>
                 <td>${q.items?.length || 0} items</td>
                 <td><strong>${App.money(q.total)}</strong></td>
-                <td><span class="badge badge-${q.status === 'APPROVED' ? 'success' : q.status === 'SENT' ? 'info' : q.status === 'REJECTED' ? 'danger' : 'gray'}">${q.status}</span></td>
+                <td>${statusBadge}</td>
                 <td>${q.createdAt}</td>
                 <td>
                     ${actionButtons}
-                    <button class="btn btn-sm btn-secondary" onclick="PDF.generateQuotation('${q.id}')" title="Download PDF"><i class="fas fa-file-pdf"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="Pages.deleteQuotation('${q.id}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn btn-sm btn-secondary" onclick="PDF.generateQuotation('${q.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
                 </td>
             </tr>
         `}).join('');
@@ -384,96 +401,197 @@ const Pages = {
         
         if (status === 'APPROVED') {
             const q = DB.getById('quotations', id);
-            
             // Recalculate total
             let qTotal = 0;
             (q.items || []).forEach(item => {
-                const sub = item.qty * item.price;
+                const sub = (item.qty || 1) * (item.price || 0);
                 qTotal += sub - (sub * (item.discount || 0) / 100);
             });
-            if (qTotal > 0) {
-                q.total = qTotal;
-                DB.update('quotations', id, { total: qTotal });
-            }
+            if (qTotal > 0) DB.update('quotations', id, { total: qTotal });
             
-            // Show advance percentage modal
-            App.showModal('Advance Payment', `
-                <div style="text-align:center;padding:10px 0 20px;">
-                    <i class="fas fa-check-circle" style="font-size:40px;color:var(--success);margin-bottom:12px;"></i>
-                    <h3 style="margin-bottom:4px;">Quotation Approved!</h3>
-                    <p style="color:var(--gray);font-size:14px;">Quotation Total: <strong>${App.money(q.total)}</strong></p>
-                </div>
-                <div class="form-group">
-                    <label>Advance Payment Percentage (%)</label>
-                    <input type="number" id="advance-percent" value="50" min="1" max="100" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:20px;text-align:center;font-weight:700;">
-                </div>
-                <div style="background:#f3f4f6;padding:16px;border-radius:8px;text-align:center;margin-top:12px;">
-                    <p style="color:#6b7280;font-size:13px;">Advance Invoice Amount:</p>
-                    <p id="advance-amount" style="font-size:24px;font-weight:700;color:#2563eb;">${App.money(q.total * 0.5)}</p>
-                </div>
-            `, `<button class="btn btn-secondary" onclick="App.closeModal();DB.update('quotations','${id}',{status:'SENT'});Pages.quotations();">Cancel</button>
-                <button class="btn btn-success" onclick="Pages.completeApproval('${id}')"><i class="fas fa-file-invoice-dollar"></i> Create Invoice</button>`);
+            // Create project
+            DB.add('projects', {
+                quotationId: id,
+                customerId: q.customerId,
+                title: 'Project - ' + q.number,
+                steps: [
+                    { name: 'Quotation Approved', status: 'COMPLETED' },
+                    { name: 'Advance Payment Requested', status: 'PENDING' },
+                    { name: 'Advance Payment Received', status: 'PENDING' },
+                    { name: 'Invoice Created', status: 'PENDING' },
+                    { name: 'Work Started', status: 'PENDING' },
+                    { name: 'Project Completed', status: 'PENDING' },
+                    { name: 'Final Payment Received', status: 'PENDING' },
+                    { name: 'Final Delivery', status: 'PENDING' }
+                ]
+            });
             
-            setTimeout(() => {
-                const input = document.getElementById('advance-percent');
-                if (input) {
-                    const qTotal = q.total;
-                    input.addEventListener('input', function() {
-                        const pct = parseFloat(this.value) || 0;
-                        const amt = qTotal * pct / 100;
-                        document.getElementById('advance-amount').textContent = App.money(amt);
-                    });
-                }
-            }, 100);
-            
+            App.showToast('Quotation approved! Now request advance payment.', 'success');
         } else {
             App.showToast('Quotation ' + status.toLowerCase(), 'success');
+        }
+        Pages.quotations();
+    },
+
+    rejectQuotation(id) {
+        if (confirm('Reject this quotation?')) {
+            DB.update('quotations', id, { status: 'REJECTED' });
+            App.showToast('Quotation rejected', 'success');
             Pages.quotations();
         }
     },
 
-    completeApproval(quotationId) {
-        const q = DB.getById('quotations', quotationId);
+    // Step: Request Advance Payment (set percentage)
+    requestAdvance(id) {
+        const q = DB.getById('quotations', id);
+        let qTotal = 0;
+        (q.items || []).forEach(item => {
+            const sub = (item.qty || 1) * (item.price || 0);
+            qTotal += sub - (sub * (item.discount || 0) / 100);
+        });
+        if (qTotal > 0) q.total = qTotal;
+        
+        App.showModal('Request Advance Payment', `
+            <div style="text-align:center;padding:10px 0 20px;">
+                <i class="fas fa-hand-holding-usd" style="font-size:40px;color:var(--warning);margin-bottom:12px;"></i>
+                <h3 style="margin-bottom:4px;">Set Advance Amount</h3>
+                <p style="color:var(--gray);font-size:14px;">Quotation Total: <strong>${App.money(q.total)}</strong></p>
+            </div>
+            <div class="form-group">
+                <label>Advance Payment Percentage (%)</label>
+                <input type="number" id="advance-percent" value="50" min="1" max="100" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:20px;text-align:center;font-weight:700;">
+            </div>
+            <div style="background:#fef3c7;padding:16px;border-radius:8px;text-align:center;margin-top:12px;">
+                <p style="color:#92400e;font-size:13px;">Advance Amount to Request:</p>
+                <p id="advance-amount" style="font-size:24px;font-weight:700;color:#d97706;">${App.money(q.total * 0.5)}</p>
+            </div>
+        `, `<button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+            <button class="btn btn-warning" onclick="Pages.confirmAdvanceRequest('${id}')"><i class="fas fa-paper-plane"></i> Request Payment</button>`);
+        
+        setTimeout(() => {
+            const input = document.getElementById('advance-percent');
+            if (input) {
+                const total = q.total;
+                input.addEventListener('input', function() {
+                    const pct = parseFloat(this.value) || 0;
+                    const amt = total * pct / 100;
+                    document.getElementById('advance-amount').textContent = App.money(amt);
+                });
+            }
+        }, 100);
+    },
+
+    confirmAdvanceRequest(id) {
+        const q = DB.getById('quotations', id);
         const percent = parseFloat(document.getElementById('advance-percent').value) || 50;
         const advanceAmount = q.total * percent / 100;
         
-        // Create project
-        DB.add('projects', {
-            quotationId: quotationId,
-            customerId: q.customerId,
-            title: 'Project - ' + q.number,
-            steps: [
-                { name: 'Quotation Approved', status: 'COMPLETED' },
-                { name: 'Advance Invoice Sent', status: 'COMPLETED' },
-                { name: 'Advance Payment Received', status: 'PENDING' },
-                { name: 'Work Started', status: 'PENDING' },
-                { name: 'Project Completed', status: 'PENDING' },
-                { name: 'Final Invoice Sent', status: 'PENDING' },
-                { name: 'Balance Payment Received', status: 'PENDING' },
-                { name: 'Final Delivery Completed', status: 'PENDING' }
-            ]
+        // Update quotation with advance details
+        DB.update('quotations', id, { 
+            status: 'ADVANCE_REQUESTED',
+            advancePercent: percent,
+            advanceAmount: advanceAmount
         });
         
-        // Create advance invoice - total = quotation total, advance amount tracked separately
-        DB.add('invoices', {
-            number: DB.generateNumber('INV-ADV'),
+        // Update project step
+        const projects = DB.getAll('projects');
+        const project = projects.find(p => p.quotationId === id);
+        if (project) {
+            project.steps[1].status = 'COMPLETED';
+            DB.update('projects', project.id, { steps: project.steps });
+        }
+        
+        App.closeModal();
+        App.showToast('Advance payment requested! ' + percent + '% = ' + App.money(advanceAmount), 'success');
+        Pages.quotations();
+    },
+
+    // Step: Record Advance Payment → Auto-creates Invoice
+    recordAdvancePayment(id) {
+        const q = DB.getById('quotations', id);
+        const advanceAmount = q.advanceAmount || (q.total * 0.5);
+        const pct = q.advancePercent || 50;
+        
+        App.showModal('Record Advance Payment', `
+            <div style="padding:12px;background:var(--gray-light);border-radius:8px;margin-bottom:16px;">
+                <p><strong>Quotation:</strong> ${q.number}</p>
+                <p><strong>Customer:</strong> ${DB.getCustomerName(q.customerId)}</p>
+                <p><strong>Total:</strong> ${App.money(q.total)}</p>
+                <p><strong>Advance (${pct}%):</strong> <span style="color:var(--warning);font-weight:700;">${App.money(advanceAmount)}</span></p>
+            </div>
+            <div class="grid-2">
+                <div class="form-group"><label>Amount Paid *</label><input type="number" id="adv-pay-amount" value="${advanceAmount}"></div>
+                <div class="form-group"><label>Method</label>
+                    <select id="adv-pay-method">
+                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                        <option value="CASH">Cash</option>
+                        <option value="CARD">Card</option>
+                        <option value="ONLINE">Online Payment</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group"><label>Reference / Note</label><input id="adv-pay-ref" placeholder="Transaction reference"></div>
+            <div class="form-group"><label>Payment Date</label><input type="date" id="adv-pay-date" value="${new Date().toISOString().split('T')[0]}"></div>
+        `, `<button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+            <button class="btn btn-success" onclick="Pages.saveAdvancePayment('${id}')"><i class="fas fa-check"></i> Confirm & Create Invoice</button>`);
+    },
+
+    saveAdvancePayment(quotationId) {
+        const q = DB.getById('quotations', quotationId);
+        const amount = parseFloat(document.getElementById('adv-pay-amount').value) || 0;
+        const method = document.getElementById('adv-pay-method').value;
+        const reference = document.getElementById('adv-pay-ref').value;
+        const payDate = document.getElementById('adv-pay-date').value || new Date().toISOString().split('T')[0];
+        
+        if (amount <= 0) { App.showToast('Enter valid amount', 'error'); return; }
+        
+        // Update quotation status
+        DB.update('quotations', quotationId, { status: 'ADVANCE_PAID' });
+        
+        // Auto-create Invoice
+        const invoice = DB.add('invoices', {
+            number: DB.generateNumber('INV'),
             quotationId: quotationId,
             customerId: q.customerId,
             type: 'ADVANCE',
-            status: 'UNPAID',
+            status: 'PARTIALLY_PAID',
             total: q.total,
-            advanceAmount: advanceAmount,
-            advancePercent: percent,
-            amountPaid: 0,
-            balance: q.total,
-            bankName: 'Commercial Bank',
-            accountName: 'DesignFox Pvt Ltd',
-            accountNumber: '8012345678',
-            branch: 'Colombo'
+            advanceAmount: q.advanceAmount || amount,
+            advancePercent: q.advancePercent || 50,
+            amountPaid: amount,
+            balance: q.total - amount
         });
         
+        // Record payment
+        const receiptNo = DB.generateNumber('RCT');
+        DB.add('payments', {
+            invoiceId: invoice.id,
+            amount: amount,
+            method: method,
+            reference: reference,
+            date: payDate,
+            receiptNo: receiptNo
+        });
+        
+        // Update project steps
+        const projects = DB.getAll('projects');
+        const project = projects.find(p => p.quotationId === quotationId);
+        if (project) {
+            project.steps[2].status = 'COMPLETED'; // Advance Payment Received
+            project.steps[3].status = 'COMPLETED'; // Invoice Created
+            project.steps[4].status = 'IN_PROGRESS'; // Work Started
+            DB.update('projects', project.id, { steps: project.steps });
+        }
+        
         App.closeModal();
-        App.showToast('Invoice created! Total: ' + App.money(q.total) + ' | Advance: ' + percent + '% = ' + App.money(advanceAmount), 'success');
+        App.showToast('Advance payment recorded! Invoice auto-created. Receipt: ' + receiptNo, 'success');
+        
+        // Auto-preview receipt
+        const savedPayment = DB.getAll('payments').find(p => p.receiptNo === receiptNo);
+        if (savedPayment) {
+            setTimeout(() => { PDF.generateReceipt(savedPayment.id); }, 500);
+        }
+        
         App.navigate('invoices');
     },
 
@@ -527,46 +645,6 @@ const Pages = {
                 <button class="btn btn-primary" onclick="PDF.generateQuotation('${id}')"><i class="fas fa-file-pdf"></i> Download PDF</button>
             </div>
         `);
-    },
-
-    createInvoiceFromQuotation(qId) {
-        const q = DB.getById('quotations', qId);
-        
-        // Recalculate quotation total from items
-        let qTotal = 0;
-        (q.items || []).forEach(item => {
-            const sub = item.qty * item.price;
-            qTotal += sub - (sub * (item.discount || 0) / 100);
-        });
-        if (qTotal > 0) q.total = qTotal;
-        
-        const advanceAmount = q.total * 0.5;
-        
-        const invoice = DB.add('invoices', {
-            number: DB.generateNumber('INV-ADV'),
-            quotationId: qId,
-            customerId: q.customerId,
-            type: 'ADVANCE',
-            status: 'UNPAID',
-            total: advanceAmount,
-            amountPaid: 0,
-            balance: advanceAmount,
-            bankName: 'Commercial Bank',
-            accountName: 'DesignFox Pvt Ltd',
-            accountNumber: '8012345678',
-            branch: 'Colombo'
-        });
-
-        // Update project step
-        const projects = DB.getAll('projects');
-        const project = projects.find(p => p.quotationId === qId);
-        if (project) {
-            project.steps[1].status = 'COMPLETED';
-            DB.update('projects', project.id, { steps: project.steps });
-        }
-
-        App.showToast('Advance invoice created (50%)!', 'success');
-        Pages.invoices();
     },
 
     // ============ INVOICES ============
